@@ -11,6 +11,7 @@ A Python library for designing wooden furniture and generating OpenSCAD models. 
 - Color-coded visualization in OpenSCAD
 - Support for composite board structures
 - Common woodworking patterns (boxes, frames, panels)
+- Flexible color handling for individual and composite boards
 
 ## Installation
 
@@ -43,60 +44,87 @@ board = factory.create_board(
     width=2.5,
     thickness=0.75,
     name="shelf_board",
-    config=BoardConfig(color='DarkGoldenrod')
+    color="DarkGoldenrod"  # Optional color specification
 )
 ```
 
-### Creating Composite Structures
+### Creating Double Boards
 
 ```python
-# Create a panel from multiple boards
-panel = factory.create_panel(
+# Create a double board with single color
+double_board = factory.create_double_board(
     length=48.0,
-    width=24.0,
+    width=2.5,
     thickness=0.75,
-    board_width=6.0,  # Width of individual boards in panel
-    name="table_top"
+    name="double_board",
+    color="DarkGoldenrod"  # Same color for both boards
 )
 
-# Create a frame
+# Create a double board with different colors
+colored_double = factory.create_double_board(
+    length=48.0,
+    width=2.5,
+    thickness=0.75,
+    name="colored_double",
+    color=["Beige", "Tan"]  # Different colors for each board
+)
+```
+
+### Creating Half-Lap Joints
+
+```python
+# Create a half-lap joint with different colors
+half_lap = factory.create_double_board_half_lap_ends(
+    length=48.0,
+    width=2.5,
+    thickness=0.75,
+    name="half_lap",
+    half_lap_length=4.0,
+    color=["DarkGreen", "ForestGreen"]  # Colors for long and short pieces
+)
+```
+
+### Creating Frames
+
+```python
+# Create a frame with different colors for each piece
 frame = factory.create_frame(
     outer_length=50.0,
     outer_width=30.0,
     board_width=2.5,
     thickness=0.75,
-    name="support_frame"
+    name="colored_frame",
+    color=["Beige", "Tan", "SandyBrown", "Peru"]  # One color per frame piece
 )
 ```
 
-### Using Patterns
+### Positioning and Combining Components
 
 ```python
-from board_tools import BoxPattern
+from solid2 import union, translate
 
-# Create a box
-box_pattern = BoxPattern()
-box = box_pattern.apply(
-    factory,
-    length=24.0,
-    width=12.0,
-    height=8.0,
-    thickness=0.75,
-    name="storage_box",
-    include_top=True
+# Position components in 3D space
+model = union()(
+    board,  # First component at origin
+    translate([0, 10, 0])(double_board),  # Offset in Y direction
+    translate([0, 20, 0])(frame)  # Further offset in Y direction
 )
+
+# Save the OpenSCAD file
+model.save_as_scad("my_project.scad")
 ```
 
 ### Example Projects
 
 The repository includes example projects:
 
-1. `desk-03.py` - A desk with drawers
+1. `desk-03.py` - A desk with space for drawers
 2. `worktable-01.py` - A sturdy workshop table
+3. `color-examples.py` - Examples of different color configurations
 
 To run an example:
 ```bash
-python worktable-01.py
+python examples/worktable-01.py
 ```
 
 This will generate:
@@ -109,25 +137,12 @@ This will generate:
 - `examples/` - Example projects showing library usage
 - `requirements.txt` - Python dependencies
 
-## Development
-
-To contribute to the project:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Dependencies
 
 - solidpython2>=2.1.1 - For OpenSCAD integration
 - dataclasses>=0.6 - For Python versions < 3.7
 - typing-extensions>=4.0.0 - For enhanced type hinting
+- sqlite3 - For board database (included in Python standard library)
 
 ## Development Dependencies
 
@@ -135,6 +150,18 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - black>=22.0.0
 - mypy>=0.900
 - pylint>=2.8.0
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## Acknowledgments
 
