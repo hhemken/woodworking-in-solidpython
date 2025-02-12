@@ -264,7 +264,7 @@ if __name__ == "__main__":
     model, factory = assemble_table(config)
 
     # Save the final SCAD model
-    model.save_as_scad(filename='worktable-01.scad', outdir='.')
+    model.save_as_scad(filename='../worktable-01.scad', outdir='.')
 
     # Print BOM from the shared in-memory DB instance
     factory.list_bom()
