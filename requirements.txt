@@ -1,0 +1,12 @@
+# Core dependencies
+solidpython2>=2.1.1  # For OpenSCAD integration
+dataclasses>=0.6  # For Python versions < 3.7, included in stdlib for 3.7+
+
+# Type hints
+typing-extensions>=4.0.0  # For enhanced type hinting support
+
+# Development dependencies
+pytest>=7.0.0  # For testing
+black>=22.0.0  # For code formatting
+mypy>=0.900  # For static type checking
+pylint>=2.8.0  # For linting
