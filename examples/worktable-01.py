@@ -38,7 +38,6 @@ class TableConfig:
     def short_width(self) -> float:
         return self.table_width - (2 * self.top_overhang)
 
-
 # ------------------------------
 # Component Colors
 # ------------------------------
@@ -54,63 +53,64 @@ COLORS = {
     'bottom_cross': 'SlateBlue'
 }
 
-
 def create_cross_member(factory: BoardFactory, config: TableConfig,
-                       name: str, x_pos: float, z_pos: float, color: str) -> union:
+                       name: str, x_pos: float, z_pos: float, color: str):
     """Create a cross member board with standard dimensions"""
     width = config.short_width - 2 * (config.board_width + config.board_thickness)
-    board_config = BoardConfig(color=color)
 
-    cross = (factory.create_board(width, config.board_width, config.board_thickness, name, board_config)
-            .to_scad(factory)
-            .rotate([0, 0, 90]))
+    cross = factory.create_board(
+        width, config.board_width, config.board_thickness,
+        name, color
+    )
 
-    return cross.translate([
-        x_pos,
-        config.top_overhang + config.board_width + config.board_thickness,
-        z_pos
-    ])
+    return (cross
+            .rotate([0, 0, 90])
+            .translate([x_pos,
+                       config.top_overhang + config.board_width + config.board_thickness,
+                       z_pos]))
 
-
-def desk_end_assembly(factory: BoardFactory, config: TableConfig, tag: str = 'a') -> union:
-    """Build one end of the desk using the provided factory."""
+def desk_end_assembly(factory: BoardFactory, config: TableConfig, tag: str = 'a'):
+    """Build one end of the table using the provided factory."""
 
     # Create the front leg assembly
     front_leg = (factory.create_double_board(
         config.leg_segment_length, config.board_width, config.board_thickness,
-        f'front leg end {tag}', color=COLORS['leg'])
-        .to_scad(factory)
+        f'front leg end {tag}', [COLORS['leg'], COLORS['leg']])
         .rotate([90, -90, 0])
-        .translate([3 * config.board_thickness, config.board_width + config.top_overhang, 0]))
+        .translate([3 * config.board_thickness,
+                   config.board_width + config.top_overhang,
+                   0]))
 
     front_foot = (factory.create_board(
         config.foot_length, config.board_width, config.board_thickness,
-        f'front leg end {tag} foot', BoardConfig(color=COLORS['foot']))
-        .to_scad(factory)
+        f'front leg end {tag} foot', COLORS['foot'])
         .rotate([90, -90, 0])
-        .translate([config.board_thickness, config.board_width + config.top_overhang, 0]))
+        .translate([config.board_thickness,
+                   config.board_width + config.top_overhang,
+                   0]))
 
     # Create the back leg assembly
     back_leg = (factory.create_double_board(
         config.leg_segment_length, config.board_width, config.board_thickness,
-        f'back leg end {tag}', color=COLORS['leg'])
-        .to_scad(factory)
+        f'back leg end {tag}', [COLORS['leg'], COLORS['leg']])
         .rotate([90, -90, 0])
-        .translate([3 * config.board_thickness, config.top_overhang + config.short_width, 0]))
+        .translate([3 * config.board_thickness,
+                   config.top_overhang + config.short_width,
+                   0]))
 
     back_foot = (factory.create_board(
         config.foot_length, config.board_width, config.board_thickness,
-        f'back leg end {tag} foot', BoardConfig(color=COLORS['foot']))
-        .to_scad(factory)
+        f'back leg end {tag} foot', COLORS['foot'])
         .rotate([90, -90, 0])
-        .translate([config.board_thickness, config.top_overhang + config.short_width, 0]))
+        .translate([config.board_thickness,
+                   config.top_overhang + config.short_width,
+                   0]))
 
     # Create bottom crossbeam
     bottom_crossbeam = (factory.create_double_board_half_lap_ends(
         config.short_width, config.board_width, config.board_thickness,
         f'bottom crossbeam end {tag}', config.board_width,
-        color_long=COLORS['crossbeam'], color_short=COLORS['crossbeam_short'])
-        .to_scad(factory)
+        color=[COLORS['crossbeam'], COLORS['crossbeam_short']])
         .rotate([180, 0, 90])
         .translate([0, 0, config.board_width + config.foot_length])
         .translate([0, config.top_overhang, 0]))
@@ -119,8 +119,7 @@ def desk_end_assembly(factory: BoardFactory, config: TableConfig, tag: str = 'a'
     top_crossbeam = (factory.create_double_board_half_lap_ends(
         config.short_width, config.board_width, config.board_thickness,
         f'top crossbeam end {tag}', config.board_width,
-        color_long=COLORS['crossbeam'], color_short=COLORS['crossbeam_short'])
-        .to_scad(factory)
+        color=[COLORS['crossbeam'], COLORS['crossbeam_short']])
         .rotate([180, 0, 90])
         .translate([0, 0, config.board_width + config.foot_length])
         .translate([0, config.top_overhang,
@@ -129,19 +128,23 @@ def desk_end_assembly(factory: BoardFactory, config: TableConfig, tag: str = 'a'
     # Create top crossbeam feet
     top_front_foot = (factory.create_board(
         config.foot_length, config.board_width, config.board_thickness,
-        f'top crossbeam end {tag} front foot', BoardConfig(color=COLORS['top_foot']))
-        .to_scad(factory)
+        f'top crossbeam end {tag} front foot', COLORS['top_foot'])
         .rotate([90, -90, 0])
-        .translate([config.board_thickness, config.board_width + config.top_overhang, 0])
-        .translate([0, 0, config.leg_segment_length - (2 * config.board_width + config.foot_length)]))
+        .translate([config.board_thickness,
+                   config.board_width + config.top_overhang,
+                   0])
+        .translate([0, 0,
+                   config.leg_segment_length - (2 * config.board_width + config.foot_length)]))
 
     top_back_foot = (factory.create_board(
         config.foot_length, config.board_width, config.board_thickness,
-        f'top crossbeam end {tag} back foot', BoardConfig(color=COLORS['top_foot']))
-        .to_scad(factory)
+        f'top crossbeam end {tag} back foot', COLORS['top_foot'])
         .rotate([90, -90, 0])
-        .translate([config.board_thickness, config.board_width + config.top_overhang, 0])
-        .translate([0, 0, config.leg_segment_length - (2 * config.board_width + config.foot_length)])
+        .translate([config.board_thickness,
+                   config.board_width + config.top_overhang,
+                   0])
+        .translate([0, 0,
+                   config.leg_segment_length - (2 * config.board_width + config.foot_length)])
         .translate([0, config.short_width - config.board_width, 0]))
 
     # Combine all components
@@ -151,84 +154,74 @@ def desk_end_assembly(factory: BoardFactory, config: TableConfig, tag: str = 'a'
         top_front_foot + top_back_foot
     )
 
-
 def assemble_table(config: TableConfig) -> Tuple[union, BoardFactory]:
     """Creates a complete table assembly using the enhanced board tools."""
 
     # Create shared database and factory
-    db = BoardDatabase(db_path=":memory:")
-    factory = BoardFactory(thickness=config.board_thickness, width=config.board_width, db=db)
+    db = BoardDatabase(":memory:")
+    factory = BoardFactory(thickness=config.board_thickness,
+                         width=config.board_width,
+                         db=db)
 
-    # Build desk ends
+    # Build table ends
     end_a = desk_end_assembly(factory, config, 'a')
     end_b = (desk_end_assembly(factory, config, 'b')
-            .rotate([0, 0, 180])
-            .translate([config.short_length, 0, 0])
-            .translate([0, 2 * config.top_overhang + config.short_width, 0]))
+             .rotate([0, 0, 180])
+             .translate([config.short_length, 0, 0])
+             .translate([0, 2 * config.top_overhang + config.short_width, 0]))
 
-    # Create top crossbeams
+    # Create top structure
     top_back = (factory.create_double_board_half_lap_ends(
         config.short_length, config.board_width, config.board_thickness,
         'top back crossbeam', 3 * config.board_thickness,
-        color_long=COLORS['crossbeam'], color_short=COLORS['crossbeam_short'])
-        .to_scad(factory)
+        color=[COLORS['bottom_beam_long'], COLORS['bottom_beam_short']])
         .rotate([180, 0, 0])
-        .translate([0, config.board_width + config.top_overhang + config.board_thickness, 0])
+        .translate([0,
+                   config.board_width + config.top_overhang + config.board_thickness,
+                   0])
         .translate([0, 0, config.leg_segment_length]))
 
     top_front = (factory.create_double_board_half_lap_ends(
         config.short_length, config.board_width, config.board_thickness,
         'top front crossbeam', 3 * config.board_thickness,
-        color_long=COLORS['crossbeam'], color_short=COLORS['crossbeam_short'])
-        .to_scad(factory)
-        .translate([0, config.short_width + config.top_overhang - config.board_width -
-                   config.board_thickness, config.leg_segment_length - config.board_width]))
+        color=[COLORS['bottom_beam_long'], COLORS['bottom_beam_short']])
+        .translate([0,
+                   config.short_width + config.top_overhang - config.board_width -
+                   config.board_thickness,
+                   config.leg_segment_length - config.board_width]))
 
     # Create cross members
-    cross_members = union()(
+    cross_members = union()(*[
         create_cross_member(
-            factory, config, 'top leftmost cross member',
-            3 * config.board_thickness,
-            config.leg_segment_length - config.board_width,
-            COLORS['cross_member']
-        ) +
-        create_cross_member(
-            factory, config, 'top first middle cross member',
-            config.short_length * 0.333,
-            config.leg_segment_length - config.board_width,
-            COLORS['cross_member']
-        ) +
-        create_cross_member(
-            factory, config, 'top second middle cross member',
-            config.short_length * 0.667,
-            config.leg_segment_length - config.board_width,
-            COLORS['cross_member']
-        ) +
-        create_cross_member(
-            factory, config, 'top rightmost cross member',
-            config.short_length - 2 * config.board_thickness,
+            factory, config,
+            f'top cross member {i+1}',
+            (3 * config.board_thickness if i == 0 else
+             config.short_length - 2 * config.board_thickness if i == 3 else
+             config.short_length * pos),
             config.leg_segment_length - config.board_width,
             COLORS['cross_member']
         )
-    )
+        for i, pos in enumerate([0.0, 0.333, 0.667, 1.0])
+    ])
 
     # Create bottom structure
     bottom_back = (factory.create_double_board_half_lap_ends(
         config.short_length, config.board_width, config.board_thickness,
         'bottom back crossbeam', 3 * config.board_thickness,
-        color_long=COLORS['bottom_beam_long'], color_short=COLORS['bottom_beam_short'])
-        .to_scad(factory)
+        color=[COLORS['bottom_beam_long'], COLORS['bottom_beam_short']])
         .rotate([180, 0, 0])
-        .translate([0, config.board_width + config.top_overhang + config.board_thickness,
+        .translate([0,
+                   config.board_width + config.top_overhang + config.board_thickness,
                    config.foot_length + 2 * config.board_width]))
 
     bottom_front = (factory.create_double_board_half_lap_ends(
         config.short_length, config.board_width, config.board_thickness,
         'bottom front crossbeam', 3 * config.board_thickness,
-        color_long=COLORS['bottom_beam_long'], color_short=COLORS['bottom_beam_short'])
-        .to_scad(factory)
-        .translate([0, config.short_width + config.top_overhang - config.board_width -
-                   config.board_thickness, config.foot_length + config.board_width]))
+        color=[COLORS['bottom_beam_long'], COLORS['bottom_beam_short']])
+        .translate([0,
+                   config.short_width + config.top_overhang - config.board_width -
+                   config.board_thickness,
+                   config.foot_length + config.board_width]))
 
     # Create bottom cross members
     bottom_cross_members = union()(*[
@@ -244,17 +237,23 @@ def assemble_table(config: TableConfig) -> Tuple[union, BoardFactory]:
         for i, pos in enumerate([0.0, 0.333, 0.667, 1.0])
     ])
 
+    # Create table top
+    table_top = (factory.create_board(
+        config.table_length, config.table_width, config.board_thickness,
+        "table_top", "DarkGoldenrod")
+        .translate([0, 0, config.leg_segment_length + config.board_thickness]))
+
     # Combine all components
     model = union()(
         end_a + end_b +
         top_back + top_front +
         cross_members +
         bottom_back + bottom_front +
-        bottom_cross_members
+        bottom_cross_members +
+        table_top
     )
 
     return model, factory
-
 
 # ------------------------------
 # Main
@@ -264,7 +263,8 @@ if __name__ == "__main__":
     model, factory = assemble_table(config)
 
     # Save the final SCAD model
-    model.save_as_scad(filename='../worktable-01.scad', outdir='.')
+    model.save_as_scad('worktable-01.scad')
 
     # Print BOM from the shared in-memory DB instance
+    print("\nBill of Materials:")
     factory.list_bom()
