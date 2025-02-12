@@ -18,27 +18,36 @@ class JoinType(Enum):
     """Types of joints between boards"""
     EDGE_TO_EDGE = auto()  # Boards joined along their edges
     FACE_TO_FACE = auto()  # Boards stacked on top of each other
-    HALF_LAP = auto()      # Half lap joint
-    BUTT_JOINT = auto()    # Simple butt joint
-    MITER = auto()         # Miter joint (e.g., for frames)
+    HALF_LAP = auto()  # Half lap joint
+    BUTT_JOINT = auto()  # Simple butt joint
+    MITER = auto()  # Miter joint (e.g., for frames)
 
 
 @dataclass
 class JointConfig:
     """Configuration for how boards are joined together"""
     join_type: JoinType
-    offset: float = 0.0    # Offset between boards
-    angle: float = 0.0     # For miter joints
+    offset: float = 0.0  # Offset between boards
+    angle: float = 0.0  # For miter joints
     lap_length: float = 0.0  # For half lap joints
 
 
 @dataclass
 class BoardConfig:
     """Configuration for board appearance and properties"""
-    color: str = 'DarkGoldenrod'
+    color: Union[str, List[str]] = 'DarkGoldenrod'  # Single color or list of colors
     grain_direction: str = 'length'  # 'length', 'width', or 'thickness'
     is_visible: bool = True
     material: str = 'pine'  # For future BOM categorization
+
+    def get_color(self, index: int = 0) -> str:
+        """Get color for specific board index in composite"""
+        if isinstance(self.color, str):
+            return self.color
+        elif isinstance(self.color, list) and len(self.color) > 0:
+            return self.color[index % len(self.color)]  # Cycle through colors if needed
+        else:
+            return 'DarkGoldenrod'  # Default fallback
 
 
 class BoardError(Exception):
@@ -166,59 +175,66 @@ class Board:
     def is_composite(self) -> bool:
         return self.composite_definition is not None
 
-    def to_scad(self, factory: 'BoardFactory') -> cube:
-        """
-        Convert board to SCAD representation
-
-        Args:
-            factory: The BoardFactory instance creating this board
-
-        Returns:
-            SCAD cube object representing this board
-        """
+    def to_scad(self, factory: 'BoardFactory'):
+        """Convert board to SCAD representation"""
         if not self.is_composite:
-            return (cube([self.length, self.thickness, self.width])
-                    .color(self.config.color))
+            # For simple boards, create a colored cube
+            board_color = self.config.color if isinstance(self.config.color, str) else self.config.color[0]
+            # Note: In OpenSCAD, Y is depth (front-to-back), Z is height
+            return color(c=board_color)(
+                cube([self.length, self.thickness, self.width])
+            )
         else:
             return self._build_composite_scad(factory)
 
-    def _build_composite_scad(self, factory: 'BoardFactory') -> union:
-        """
-        Generate SCAD for composite board structures
-
-        Args:
-            factory: The BoardFactory instance creating this board
-
-        Returns:
-            SCAD union object representing the composite structure
-
-        Raises:
-            ValueError: If no composite definition exists
-        """
+    def _build_composite_scad(self, factory: 'BoardFactory'):
+        """Generate SCAD for composite board structures"""
         if not self.composite_definition:
             raise ValueError("No composite definition found")
 
         components = []
-        current_offset = [0, 0, 0]
+        current_offset = [0, 0, 0]  # [x=length, y=width, z=thickness]
+        print(f"\nBuilding composite SCAD for {self.name}")
 
-        for board, joint_config in self.composite_definition.components:
-            scad = board.to_scad(factory)
+        for i, (board, joint_config) in enumerate(self.composite_definition.components):
+            # Create the basic board shape with correct color
+            board_color = (board.config.color if isinstance(board.config.color, str)
+                           else board.config.color[min(i, len(board.config.color) - 1)])
 
-            if joint_config.join_type == JoinType.FACE_TO_FACE:
-                current_offset[1] += board.thickness
-            elif joint_config.join_type == JoinType.EDGE_TO_EDGE:
-                current_offset[2] += board.width
-            elif joint_config.join_type == JoinType.HALF_LAP:
-                if joint_config.lap_length > 0:
-                    current_offset[0] += joint_config.lap_length
-            elif joint_config.join_type == JoinType.MITER:
-                # Apply miter angle rotation
-                scad = scad.rotate([0, 0, joint_config.angle])
+            print(f"  Board {i}: {board.name}")
+            print(f"    Dimensions: {board.length} x {board.width} x {board.thickness}")
+            print(f"    Color: {board_color}")
+            print(f"    Current offset before: {current_offset}")
 
-            components.append(scad.translate(current_offset))
+            # Create cube with dimensions in OpenSCAD order [x=length, y=width, z=thickness]
+            scad = color(c=board_color)(
+                cube([board.length, board.width, board.thickness])
+            )
+
+            # Apply joint-specific transformations and offsets
+            if i > 0:  # Skip offset for first board
+                if joint_config.join_type == JoinType.FACE_TO_FACE:
+                    # For face-to-face, offset in Z (thickness) direction
+                    # Get the thickness of the previous board
+                    prev_thickness = self.composite_definition.components[i - 1][0].thickness
+                    current_offset[2] += prev_thickness
+                    print(f"    Adding face-to-face offset: {prev_thickness}")
+                elif joint_config.join_type == JoinType.EDGE_TO_EDGE:
+                    # For edge-to-edge, offset in Y (width) direction
+                    current_offset[1] += board.width
+                elif joint_config.join_type == JoinType.HALF_LAP:
+                    if joint_config.lap_length > 0:
+                        current_offset[0] += joint_config.lap_length
+                elif joint_config.join_type == JoinType.MITER:
+                    scad = rotate(a=[0, 0, joint_config.angle])(scad)
+
+            print(f"    Current offset after: {current_offset}")
+            print(f"    Joint type: {joint_config.join_type}")
+
+            # Add the transformed component
+            components.append(translate(v=current_offset)(scad))
 
         return union()(*components)
-
 
 # ------------------------------
 # SQLite Database Class
@@ -278,12 +294,18 @@ class BoardDatabase:
         Args:
             board: The Board instance to insert
         """
+        # Convert color to string representation for storage
+        if isinstance(board.config.color, list):
+            color_str = ",".join(board.config.color)
+        else:
+            color_str = str(board.config.color)
+
         with self.transaction() as c:
             c.execute("""
-                INSERT INTO boards (name, length, width, thickness, material, color, grain_direction)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (board.name, board.length, board.width, board.thickness,
-                  board.config.material, board.config.color, board.config.grain_direction))
+                 INSERT INTO boards (name, length, width, thickness, material, color, grain_direction)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+             """, (board.name, board.length, board.width, board.thickness,
+                   board.config.material, color_str, board.config.grain_direction))
 
     def update_board(self, board_id: int, **kwargs) -> None:
         """
@@ -387,7 +409,6 @@ class BoardFactory:
         self._thickness = thickness
         self._width = width
         self.db = db if db else BoardDatabase(db_path=":memory:")
-        self.bill_of_materials: Dict[str, List[Board]] = {}
 
     @property
     def thickness(self) -> float:
@@ -404,101 +425,123 @@ class BoardFactory:
         self.bill_of_materials[board.name].append(board)
         self.db.insert_board(board)
 
-    def create_board(self, length: float, width: float, thickness: float,
-                     name: str, config: Optional[BoardConfig] = None) -> Board:
-        """Create a single board with optional configuration"""
-        board = Board(length, width, thickness, name, config)
-        self.add_board_to_bom(board)
-        return board
-
     def create_composite_board(self, name: str) -> CompositeBoardDefinition:
         """Start defining a new composite board"""
         return CompositeBoardDefinition(name)
 
+    def create_board(self, length: float, width: float, thickness: float,
+                     name: str, color: Union[str, List[str]] = 'DarkGoldenrod'):
+        """Create a single board with SCAD geometry"""
+        # Add to BOM and DB
+        board_color = color if isinstance(color, str) else color[0]
+        board = Board(length, width, thickness, name, BoardConfig(color=board_color))
+        self.db.insert_board(board)
+
+        # Create and return SCAD geometry
+        return cube([length, thickness, width]).color(board_color)
+
     def create_double_board(self, length: float, width: float, thickness: float,
-                            name: str, color: str = 'DarkGoldenrod') -> Board:
-        """Stack two boards in the Y-direction"""
-        config = BoardConfig(color=color)
-        composite_def = self.create_composite_board(name)
+                            name: str, color: Union[str, List[str]] = 'DarkGoldenrod'):
+        """Stack two boards in the Y-direction, offset by thickness"""
+        if isinstance(color, str):
+            color1 = color2 = color
+        else:
+            color1 = color[0] if len(color) > 0 else 'DarkGoldenrod'
+            color2 = color[1] if len(color) > 1 else color1
 
-        board1 = self.create_board(length, width, thickness, f"{name}_1", config)
-        board2 = self.create_board(length, width, thickness, f"{name}_2", config)
+        # Create first board at origin
+        board1 = self.create_board(length, width, thickness, f"{name}_1", color1)
 
-        composite_def.add_board(board1, JointConfig(JoinType.FACE_TO_FACE))
-        composite_def.add_board(board2, JointConfig(JoinType.FACE_TO_FACE))
+        # Create second board translated by thickness
+        board2 = (self.create_board(length, width, thickness, f"{name}_2", color2)
+                  .translate([0, thickness, 0]))
 
-        result = Board(length, width, thickness * 2, name, config)
-        result.composite_definition = composite_def
-        return result
+        return union()(board1 + board2)
 
     def create_double_board_half_lap_ends(self, length: float, width: float,
                                           thickness: float, name: str,
                                           half_lap_length: float,
                                           only_one_end: bool = False,
-                                          color_long: str = 'Beige',
-                                          color_short: str = 'Tan') -> Board:
+                                          color: Union[str, List[str]] = 'DarkGoldenrod'):
         """Creates two overlapping boards with half-lap joints at the ends"""
+        if isinstance(color, str):
+            color_long = color_short = color
+        else:
+            color_long = color[0] if len(color) > 0 else 'DarkGoldenrod'
+            color_short = color[1] if len(color) > 1 else color_long
+
         half_lap = 2 * half_lap_length if not only_one_end else half_lap_length
 
-        config_long = BoardConfig(color=color_long)
-        config_short = BoardConfig(color=color_short)
-        composite_def = self.create_composite_board(name)
+        # Create long board at origin
+        board1 = self.create_board(length, width, thickness, f"{name}_long", color_long)
 
-        board1 = self.create_board(length, width, thickness, f"{name}_long", config_long)
-        board2 = self.create_board(length - half_lap, width, thickness, f"{name}_short", config_short)
+        # Create short board translated by half_lap_length and thickness
+        board2 = (self.create_board(length - half_lap, width, thickness, f"{name}_short", color_short)
+                  .translate([half_lap_length, thickness, 0]))
 
-        composite_def.add_board(board1, JointConfig(JoinType.FACE_TO_FACE))
-        composite_def.add_board(board2, JointConfig(JoinType.HALF_LAP, lap_length=half_lap_length))
-
-        result = Board(length, width, thickness * 2, name)
-        result.composite_definition = composite_def
-        return result
+        return union()(board1 + board2)
 
     def create_frame(self, outer_length: float, outer_width: float, board_width: float,
-                     thickness: float, name: str) -> Board:
+                     thickness: float, name: str,
+                     color: Union[str, List[str]] = 'DarkGoldenrod'):
         """Create a rectangular frame from four boards with miter joints"""
-        frame_def = self.create_composite_board(name)
+        if isinstance(color, str):
+            colors = [color] * 4
+        else:
+            colors = color
+            if len(colors) < 4:
+                colors.extend(['DarkGoldenrod'] * (4 - len(colors)))
 
         # Calculate board lengths for 45-degree miters
         length_boards = [
-            self.create_board(outer_length, board_width, thickness, f"{name}_length_1"),
-            self.create_board(outer_length, board_width, thickness, f"{name}_length_2")
+            self.create_board(outer_length, board_width, thickness,
+                              f"{name}_length_1", colors[0]),
+            self.create_board(outer_length, board_width, thickness,
+                              f"{name}_length_2", colors[1])
         ]
 
         width_boards = [
             self.create_board(outer_width - 2 * board_width, board_width, thickness,
-                              f"{name}_width_1"),
+                              f"{name}_width_1", colors[2]),
             self.create_board(outer_width - 2 * board_width, board_width, thickness,
-                              f"{name}_width_2")
+                              f"{name}_width_2", colors[3])
         ]
 
-        # Add boards with miter joints
-        for board in length_boards + width_boards:
-            frame_def.add_board(board, JointConfig(JoinType.MITER, angle=45))
+        mitered_boards = []
+        for i, board in enumerate(length_boards + width_boards):
+            # Apply appropriate transformations for each board position
+            if i < 2:  # Length boards
+                transformed = board
+            else:  # Width boards
+                transformed = (board
+                               .translate([board_width, 0, 0])
+                               .rotate([0, 0, 90]))
+            mitered_boards.append(transformed)
 
-        composite = Board(outer_length, outer_width, thickness, name)
-        composite.composite_definition = frame_def
-        return composite
+        return union()(*mitered_boards)
 
     def create_panel(self, length: float, width: float, thickness: float,
-                     board_width: float, name: str) -> Board:
+                     board_width: float, name: str,
+                     color: Union[str, List[str]] = 'DarkGoldenrod') -> Board:
         """Create a panel from boards joined edge-to-edge"""
         panel_def = self.create_composite_board(name)
+        config = BoardConfig(color=color)
 
         # Calculate number of boards needed
         num_boards = int(width / board_width) + (1 if width % board_width else 0)
         remaining_width = width
 
         for i in range(num_boards):
-            # Calculate the width of this board (handle the last board being potentially narrower)
+            # Calculate the width of this board
             this_board_width = min(board_width, remaining_width)
             remaining_width -= this_board_width
 
             board = self.create_board(length, this_board_width, thickness,
-                                      f"{name}_board_{i + 1}")
+                                      f"{name}_board_{i + 1}",
+                                      BoardConfig(color=config.get_color(i)))
             panel_def.add_board(board, JointConfig(JoinType.EDGE_TO_EDGE))
 
-        composite = Board(length, width, thickness, name)
+        composite = Board(length, width, thickness, name, config)
         composite.composite_definition = panel_def
         return composite
 
